@@ -1,64 +1,98 @@
-# Coleta de Lixo Automatizada — Dashboard
+# Caminhãozinho de Lixo - Dashboard Mobile
 
-Este é o repositório/dashboard front-end do projeto de Coleta de Lixo Automatizada (carrinho seguidor de linha inteligente baseado em ESP32). A interface foi projetada com foco em dispositivos móveis (mobile-first), apresentando um design escuro premium com tons de rosa, focando na simplicidade e objetividade.
+Aplicativo mobile em React Native com Expo para monitoramento de um caminhãozinho de lixo usado em uma maquete urbana inteligente.
 
-A dashboard exibe de forma estática o estado operacional do carrinho, os dados da maquete física dividida entre casinhas (pontos de coleta) e o centro de lixo, a contagem de resíduos categorizados apenas entre Reciclável e Não Reciclável, e a timeline de atividades recentes.
+O app exibe apenas dados de acompanhamento do caminhãozinho. Ele nao possui botoes de controle, tela de login, backend ou integracao direta com ESP32 nesta etapa.
 
----
+## Tecnologias
 
-## Tecnologias Utilizadas
+- React Native
+- Expo SDK 54
+- TypeScript
+- StyleSheet
+- @expo/vector-icons
 
-- HTML5 (Estrutura semântica)
-- CSS3 (Estilização customizada, variáveis CSS, layout responsivo)
-- JavaScript (Manipulação de dados estáticos e renderização de componentes com SVG inline)
+## Funcionalidades
 
----
+- Status de conexao do caminhãozinho
+- Nivel de bateria
+- Velocidade atual
+- Estado operacional
+- Carga atual
+- Cor captada pelo sensor das lixeiras
+- Localizacao na maquete
+- Rota atual do caminhãozinho
+- Quantidade de lixeiras coletadas
+- Tempo de funcionamento
+- Ultimo evento registrado
+- Indicador visual de atualizacao
+- Seletor de tema com rosa, azul, verde e amarelo
 
-## Como Executar o Projeto
+## Dados simulados
 
-Como este projeto é composto exclusivamente por arquivos estáticos de front-end (HTML, CSS e JS), não é necessário compilar nada. Existem duas maneiras simples de executá-lo:
+Os dados iniciais ficam em:
 
-### Opção 1: Abrir Diretamente no Navegador (Mais Rápido)
-1. Navegue até a pasta do projeto: coletaautomatizada-repositorio.
-2. Dê um duplo clique no arquivo index.html (ou clique com o botão direito e selecione para abrir com o navegador de sua preferência, como Google Chrome, Microsoft Edge, Firefox, Safari, etc.).
+```text
+data/mockVehicleData.ts
+```
 
----
+A tela alterna automaticamente entre registros simulados a cada 4 segundos. No futuro, esse ponto pode ser substituido por uma chamada HTTP para a API do ESP32.
 
-### Opção 2: Executar um Servidor Local (Recomendado para simular o ambiente web)
-Se você tem o Node.js instalado na sua máquina, você pode usar um servidor HTTP estático local:
+As rotas simuladas seguem a regra da maquete:
 
-1. Abra o terminal (PowerShell, CMD ou Bash) na pasta do projeto:
-   ```bash
-   cd c:\Users\sofia\Desktop\faculdade\coletaautomatizada-repositorio
-   ```
+- Rota 1: pegar lixo nas lixeiras.
+- Rota 2: jogar lixo no centro de lixo.
 
-2. Execute o servidor utilizando o npx (que vem junto com o Node.js):
-   ```bash
-   npx serve -l 3000
-   ```
+## Estrutura
 
-3. Abra o navegador e acesse o endereço:
-   ```text
-   http://localhost:3000
-   ```
+```text
+App.tsx
+components/
+  InfoCard.tsx
+  SectionCard.tsx
+  StatusCard.tsx
+data/
+  mockVehicleData.ts
+types/
+  VehicleData.ts
+```
 
-(Caso utilize o VS Code, você também pode clicar com o botão direito sobre o arquivo index.html e selecionar "Open with Live Server" se tiver essa extensão instalada).
+Os arquivos antigos da versao web estatica (`index.html`, `style.css` e `app.js`) foram preservados no repositorio.
 
----
+## Como Rodar
 
-## Visualização no Celular
-A dashboard foi planejada principalmente para uso em celular. Para visualizar de forma ideal no computador:
-1. Abra o painel nas ferramentas de desenvolvedor do navegador (F12 ou Ctrl+Shift+I).
-2. Clique no ícone de dispositivo móvel (modo responsivo) para simular uma tela de smartphone.
-3. Se rodar pela Opção 2 na mesma rede Wi-Fi, você pode acessar pelo celular usando o seu IP local (exemplo: http://192.168.x.x:3000).
+Instale as dependencias:
 
----
+```bash
+npm install
+```
 
-## Estrutura da Dashboard
+Inicie o Expo:
 
-- Status do Carrinho: Informações sobre o nível de bateria, velocidade de movimentação, o modo de operação (Seguindo Linha) e a leitura atual do sensor de cor.
-- Visão Geral da Maquete:
-  - Centro de Lixo: Mostra 2 lixeiras grandes (uma para materiais Reciclados e outra para Não Reciclados).
-  - Casinhas: Mostra os 4 pontos de coleta da cidadezinha (Casa 1, Casa 2, Casa 3 e Casa 4), com lixeiras pequenas.
-- Coleta por Tipo: Totalizador consolidado das coletas divididas entre Reciclados e Não Reciclados.
-- Atividade Recente: Linha do tempo mostrando as últimas ações do carrinho (detecções, coletas efetuadas e locomoção entre trechos).
+```bash
+npm start
+```
+
+Depois, abra no celular Android usando o Expo Go ou execute:
+
+```bash
+npm run android
+```
+
+## Observacao
+
+Este front-end esta preparado para receber integracao real futuramente. O comentario no `App.tsx` indica onde a chamada HTTP para o ESP32 deve entrar.
+
+## Integracao futura com ESP32
+
+Para a integracao real, a opcao escolhida para a maquete e fazer o ESP32 criar a propria rede Wi-Fi em modo Access Point.
+
+Fluxo esperado:
+
+```text
+Celular conectado na rede Wi-Fi do ESP32
+App Expo acessa http://192.168.4.1/status
+ESP32 responde os dados atuais em JSON
+```
+
+O app deve continuar apenas exibindo dados de monitoramento. O controle do caminhãozinho, leitura do sensor de linha, leitura do sensor das lixeiras, rotas e contagem ficam no codigo do ESP32. A API do ESP32 apenas disponibiliza esses dados para a dashboard.
