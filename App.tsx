@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Linking,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions
 } from "react-native";
@@ -14,7 +17,11 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { InfoCard } from "./components/InfoCard";
 import { SectionCard } from "./components/SectionCard";
 import { StatusCard } from "./components/StatusCard";
-import { getNextVehicleData, mockVehicleData } from "./data/mockVehicleData";
+import {
+  createOfflineVehicleData,
+  ESP32_STATUS_URL,
+  fetchVehicleDataFromEsp32
+} from "./services/esp32VehicleData";
 
 const THEMES = {
   pink: {
@@ -66,6 +73,17 @@ const THEMES = {
 type ThemeName = keyof typeof THEMES;
 
 const THEME_KEYS = Object.keys(THEMES) as ThemeName[];
+const DEFAULT_ESP32_IP = ESP32_STATUS_URL.replace("http://", "").replace("/status", "");
+const DEFAULT_ESP32_PASSWORD = "12345678";
+
+const buildEsp32StatusUrl = (ip: string) => {
+  const host = ip
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "");
+
+  return `http://${host || DEFAULT_ESP32_IP}/status`;
+};
 
 const formatUptime = (minutes: number) => {
   const hours = Math.floor(minutes / 60);
@@ -78,22 +96,26 @@ const formatUptime = (minutes: number) => {
   return `${hours}h ${remainingMinutes}min`;
 };
 
-const getTrashBinSensorHelper = (sensorColor: string) => {
-  if (sensorColor === "Preto") {
-    return "Lixeira detectada";
+const formatDigitalSensorValue = (value: 0 | 1) => {
+  return value === 1 ? "HIGH" : "LOW";
+};
+
+const getColorSensorHelper = (colorCode: number) => {
+  if (colorCode >= 1 && colorCode <= 3) {
+    return `Código ${colorCode} calculado pelo ESP32`;
   }
 
-  if (sensorColor === "Branco") {
-    return "Sem lixeira";
-  }
-
-  return "Cor da lixeira";
+  return "Sem cor válida identificada";
 };
 
 export default function App() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [vehicleData, setVehicleData] = useState(mockVehicleData[0]);
+  const [vehicleData, setVehicleData] = useState(createOfflineVehicleData);
   const [selectedTheme, setSelectedTheme] = useState<ThemeName>("pink");
+  const [esp32Ip, setEsp32Ip] = useState(DEFAULT_ESP32_IP);
+  const [esp32Password, setEsp32Password] = useState(DEFAULT_ESP32_PASSWORD);
+  const [statusUrl, setStatusUrl] = useState(ESP32_STATUS_URL);
+  const [connectionMessage, setConnectionMessage] = useState("Aguardando conexão");
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const pulse = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
   const isCompact = width < 380;
@@ -101,7 +123,7 @@ export default function App() {
   const updateLabel = useMemo(() => {
     return vehicleData.connectionStatus === "online"
       ? "Dados atualizados"
-      : "Reconectando";
+      : "Aguardando ESP32";
   }, [vehicleData.connectionStatus]);
 
   useEffect(() => {
@@ -126,17 +148,59 @@ export default function App() {
   }, [pulse]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Aqui futuramente entra a chamada HTTP para o ESP32.
-      setCurrentIndex((index) => {
-        const next = getNextVehicleData(index);
-        setVehicleData(next.data);
-        return next.index;
-      });
-    }, 4000);
+    let isMounted = true;
 
-    return () => clearInterval(interval);
-  }, []);
+    const updateVehicleData = async () => {
+      const esp32Data = await fetchVehicleDataFromEsp32(statusUrl);
+
+      if (!isMounted) {
+        return;
+      }
+
+      setVehicleData(esp32Data ?? createOfflineVehicleData());
+
+      if (esp32Data) {
+        setConnectionMessage("Conectado ao ESP32");
+      }
+    };
+
+    updateVehicleData();
+
+    const interval = setInterval(updateVehicleData, 4000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [statusUrl]);
+
+  const handleConnect = async () => {
+    const nextStatusUrl = buildEsp32StatusUrl(esp32Ip);
+
+    setIsTestingConnection(true);
+    setStatusUrl(nextStatusUrl);
+
+    const esp32Data = await fetchVehicleDataFromEsp32(nextStatusUrl);
+
+    setVehicleData(esp32Data ?? createOfflineVehicleData());
+    setConnectionMessage(
+      esp32Data ? "Conectado ao ESP32" : "Sem resposta do ESP32"
+    );
+    setIsTestingConnection(false);
+  };
+
+  const handleOpenWifiSettings = async () => {
+    try {
+      if (Platform.OS === "android") {
+        await Linking.sendIntent("android.settings.WIFI_SETTINGS");
+        return;
+      }
+
+      await Linking.openSettings();
+    } catch {
+      setConnectionMessage("Abra o Wi-Fi do celular");
+    }
+  };
 
   const pulseScale = pulse.interpolate({
     inputRange: [0, 1],
@@ -150,7 +214,7 @@ export default function App() {
 
   const theme = THEMES[selectedTheme];
   const isOnline = vehicleData.connectionStatus === "online";
-  const stateColor = vehicleData.state === "Parado" ? "#A64B61" : theme.accent;
+  const stateColor = !isOnline || vehicleData.state === "Parado" ? "#A64B61" : theme.accent;
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -229,43 +293,163 @@ export default function App() {
           softBackground={theme.soft}
         />
 
+        <View
+          style={[
+            styles.connectionCard,
+            { borderColor: theme.border, shadowColor: theme.shadow }
+          ]}
+        >
+          <View style={styles.connectionHeader}>
+            <View style={styles.connectionTitleRow}>
+              <Ionicons name="wifi-outline" size={18} color={theme.accent} />
+              <Text style={styles.connectionTitle}>Conexão ESP32</Text>
+            </View>
+            <View style={[styles.connectionBadge, { backgroundColor: theme.soft }]}>
+              <View
+                style={[
+                  styles.connectionBadgeDot,
+                  { backgroundColor: isOnline ? "#2E9B66" : "#A64B61" }
+                ]}
+              />
+              <Text style={styles.connectionBadgeText}>{connectionMessage}</Text>
+            </View>
+          </View>
+
+          <View style={styles.connectionMeta}>
+            <Text style={styles.connectionMetaText}>Rede: Caminhaozinho-ESP32</Text>
+          </View>
+
+          <View style={styles.connectionFields}>
+            <View style={styles.connectionField}>
+              <Text style={styles.connectionLabel}>IP</Text>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="default"
+                onChangeText={setEsp32Ip}
+                placeholder={DEFAULT_ESP32_IP}
+                placeholderTextColor="#B7A3AD"
+                style={[styles.connectionInput, { borderColor: theme.border }]}
+                value={esp32Ip}
+              />
+            </View>
+
+            <View style={styles.connectionField}>
+              <Text style={styles.connectionLabel}>Senha</Text>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={setEsp32Password}
+                placeholder={DEFAULT_ESP32_PASSWORD}
+                placeholderTextColor="#B7A3AD"
+                style={[styles.connectionInput, { borderColor: theme.border }]}
+                value={esp32Password}
+              />
+            </View>
+          </View>
+
+          <View style={styles.connectionActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleOpenWifiSettings}
+              style={[
+                styles.wifiButton,
+                { borderColor: theme.border, backgroundColor: theme.soft }
+              ]}
+            >
+              <Ionicons name="settings-outline" size={17} color={theme.accent} />
+              <Text style={[styles.wifiButtonText, { color: theme.accent }]}>Wi-Fi</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={isTestingConnection}
+              onPress={handleConnect}
+              style={[
+                styles.connectButton,
+                { backgroundColor: theme.accent },
+                isTestingConnection && styles.connectButtonDisabled
+              ]}
+            >
+              <Ionicons name="radio-outline" size={17} color="#FFFFFF" />
+              <Text style={styles.connectButtonText}>
+                {isTestingConnection ? "Testando" : "Conectar"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
         <View style={[styles.grid, isCompact && styles.gridCompact]}>
           <InfoCard
-            label="Bateria"
-            value={`${vehicleData.batteryLevel}%`}
-            helper={vehicleData.batteryLevel > 30 ? "Nível estável" : "Nível baixo"}
-            icon="battery-half-outline"
+            label="Sensor de linha"
+            value={isOnline ? vehicleData.lineSensors.status : "--"}
+            helper={
+              isOnline
+                ? `Esq ${formatDigitalSensorValue(
+                    vehicleData.lineSensors.left
+                  )} | Dir ${formatDigitalSensorValue(vehicleData.lineSensors.right)}`
+                : "Sem leitura"
+            }
+            icon="git-branch-outline"
             accentColor={theme.accent}
             borderColor={theme.border}
             shadowColor={theme.shadow}
           />
 
           <InfoCard
-            label="Velocidade"
-            value={`${vehicleData.speed.toFixed(2)} m/s`}
-            helper={vehicleData.speed > 0 ? "Em movimento" : "Sem movimento"}
-            icon="speedometer-outline"
+            label="Cor detectada"
+            value={isOnline ? vehicleData.colorSensor.detectedColor : "--"}
+            helper={
+              isOnline
+                ? getColorSensorHelper(vehicleData.colorSensor.colorCode)
+                : "Sem leitura"
+            }
+            icon="color-palette-outline"
             accentColor={theme.secondary}
             borderColor={theme.border}
             shadowColor={theme.shadow}
           />
 
           <InfoCard
-            label="Carga"
-            value={vehicleData.load}
-            helper={vehicleData.load === "Com lixo" ? "Carga detectada" : "Sem carga"}
-            icon="cube-outline"
+            label="Pulsos RGB"
+            value={
+              isOnline
+                ? `${vehicleData.colorSensor.redPulse}/${vehicleData.colorSensor.greenPulse}/${vehicleData.colorSensor.bluePulse}`
+                : "--"
+            }
+            helper="Vermelho | Verde | Azul"
+            icon="pulse-outline"
             accentColor={theme.tertiary}
             borderColor={theme.border}
             shadowColor={theme.shadow}
           />
 
           <InfoCard
-            label="Sensor das lixeiras"
-            value={vehicleData.trashBinSensorColor}
-            helper={getTrashBinSensorHelper(vehicleData.trashBinSensorColor)}
-            icon="color-palette-outline"
+            label="Rota"
+            value={isOnline ? vehicleData.route.id : "--"}
+            helper={isOnline ? vehicleData.route.purpose : "Sem leitura"}
+            icon="map-outline"
             accentColor={theme.sensor}
+            borderColor={theme.border}
+            shadowColor={theme.shadow}
+          />
+
+          <InfoCard
+            label="Carga"
+            value={isOnline ? vehicleData.load : "--"}
+            helper={isOnline ? "Inferida pelo fim da coleta/despejo" : "Sem leitura"}
+            icon="cube-outline"
+            accentColor={theme.accent}
+            borderColor={theme.border}
+            shadowColor={theme.shadow}
+          />
+
+          <InfoCard
+            label="Localização"
+            value={isOnline ? vehicleData.location : "--"}
+            helper={isOnline ? "Inferida pela rotina dos servos" : "Sem leitura"}
+            icon="location-outline"
+            accentColor={theme.secondary}
             borderColor={theme.border}
             shadowColor={theme.shadow}
           />
@@ -288,35 +472,16 @@ export default function App() {
                 {vehicleData.state}
               </Text>
               <Text style={styles.stateDescription}>
-                Monitorando a rota atual do caminhãozinho na maquete.
+                {isOnline
+                  ? "Estado calculado pelo ESP32 a partir da rota e dos sensores."
+                  : "Conecte o celular na rede Wi-Fi do ESP32 para receber os dados."}
               </Text>
             </View>
           </View>
         </SectionCard>
 
         <SectionCard
-          title="Localização atual"
-          icon="location-outline"
-          accentColor={theme.accent}
-          borderColor={theme.border}
-          shadowColor={theme.shadow}
-        >
-          <View style={styles.locationRow}>
-            <Text style={styles.locationValue}>{vehicleData.location}</Text>
-            <View style={[styles.routePill, { backgroundColor: theme.soft }]}>
-              <Ionicons name="map-outline" size={15} color={theme.accent} />
-              <View style={styles.routeTextGroup}>
-                <Text style={[styles.routeTitle, { color: theme.accent }]}>
-                  {vehicleData.route.id}
-                </Text>
-                <Text style={styles.routeText}>{vehicleData.route.purpose}</Text>
-              </View>
-            </View>
-          </View>
-        </SectionCard>
-
-        <SectionCard
-          title="Resumo"
+          title="Resumo dos sensores"
           icon="stats-chart-outline"
           accentColor={theme.secondary}
           borderColor={theme.border}
@@ -324,7 +489,9 @@ export default function App() {
         >
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryNumber}>{vehicleData.trashBinsCollected}</Text>
+              <Text style={styles.summaryNumber}>
+                {isOnline ? vehicleData.trashBinsCollected : "--"}
+              </Text>
               <Text style={styles.summaryLabel}>Lixeiras coletadas</Text>
             </View>
 
@@ -332,10 +499,19 @@ export default function App() {
 
             <View style={styles.summaryItem}>
               <Text style={styles.summaryNumber}>
-                {formatUptime(vehicleData.uptimeMinutes)}
+                {isOnline ? vehicleData.stopCount : "--"}
               </Text>
-              <Text style={styles.summaryLabel}>Funcionamento</Text>
+              <Text style={styles.summaryLabel}>Paradas no ciclo</Text>
             </View>
+          </View>
+
+          <View style={[styles.summaryDividerHorizontal, { backgroundColor: theme.border }]} />
+
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryNumber}>
+              {isOnline ? formatUptime(vehicleData.uptimeMinutes) : "--"}
+            </Text>
+            <Text style={styles.summaryLabel}>Funcionamento do ESP32</Text>
           </View>
         </SectionCard>
 
@@ -383,7 +559,8 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFF5F8"
+    backgroundColor: "#FFF5F8",
+    paddingTop: Platform.OS === "android" ? 30 : 0
   },
   container: {
     flex: 1,
@@ -391,7 +568,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 24,
     paddingBottom: 30,
     gap: 16
   },
@@ -484,6 +661,116 @@ const styles = StyleSheet.create({
   gridCompact: {
     gap: 10
   },
+  connectionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 14,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 3
+  },
+  connectionHeader: {
+    gap: 10
+  },
+  connectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  connectionTitle: {
+    color: "#2E252A",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  connectionBadge: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  connectionBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4
+  },
+  connectionBadgeText: {
+    color: "#7B6871",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  connectionMeta: {
+    marginTop: 12
+  },
+  connectionMetaText: {
+    color: "#7B6871",
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  connectionFields: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12
+  },
+  connectionField: {
+    flex: 1,
+    gap: 6
+  },
+  connectionLabel: {
+    color: "#7B6871",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  connectionInput: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 11,
+    color: "#2E252A",
+    fontSize: 14,
+    fontWeight: "700",
+    backgroundColor: "#FFFFFF"
+  },
+  connectionActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12
+  },
+  wifiButton: {
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14
+  },
+  wifiButtonText: {
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  connectButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8
+  },
+  connectButtonDisabled: {
+    opacity: 0.72
+  },
+  connectButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900"
+  },
   stateRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -509,37 +796,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 4
   },
-  locationRow: {
-    gap: 12
-  },
-  locationValue: {
-    color: "#2E252A",
-    fontSize: 28,
-    fontWeight: "900"
-  },
-  routePill: {
-    alignSelf: "stretch",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    backgroundColor: "#FFF5F8",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8
-  },
-  routeTextGroup: {
-    flex: 1
-  },
-  routeTitle: {
-    color: "#D9447C",
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  routeText: {
-    color: "#7B6871",
-    fontSize: 12,
-    fontWeight: "700"
-  },
   summaryRow: {
     flexDirection: "row",
     alignItems: "center"
@@ -563,6 +819,12 @@ const styles = StyleSheet.create({
     height: 46,
     backgroundColor: "#F3CAD9",
     marginHorizontal: 18
+  },
+  summaryDividerHorizontal: {
+    height: 1,
+    alignSelf: "stretch",
+    backgroundColor: "#F3CAD9",
+    marginVertical: 16
   },
   eventText: {
     color: "#2E252A",

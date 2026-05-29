@@ -1,47 +1,56 @@
-# Caminhãozinho de Lixo - Dashboard Mobile
+# Caminhãozinho de Lixo - Supervisório Mobile
 
-Aplicativo mobile em React Native com Expo para monitoramento de um caminhãozinho de lixo usado em uma maquete urbana inteligente.
+Aplicativo mobile em React Native com Expo para receber e exibir dados reais do ESP32 do caminhãozinho de lixo.
 
-O app exibe apenas dados de acompanhamento do caminhãozinho. Ele nao possui botoes de controle, tela de login, backend ou integracao direta com ESP32 nesta etapa.
+O supervisório não usa dados simulados. Quando o ESP32 não está conectado ou não responde, o app fica offline aguardando a conexão.
 
-## Tecnologias
+## Dados exibidos
 
-- React Native
-- Expo SDK 54
-- TypeScript
-- StyleSheet
-- @expo/vector-icons
+O app exibe apenas dados que o ESP32 consegue ler ou calcular a partir do código embarcado:
 
-## Funcionalidades
-
-- Status de conexao do caminhãozinho
-- Nivel de bateria
-- Velocidade atual
-- Estado operacional
-- Carga atual
-- Cor captada pelo sensor das lixeiras
-- Localizacao na maquete
-- Rota atual do caminhãozinho
+- Estado atual da rotina
+- Rota atual calculada pelo ESP32
+- Carga inferida pelo fim da rotina de coleta/despejo
+- Localização operacional inferida pela rotina dos servos
+- Leituras digitais dos sensores IR esquerdo e direito
+- Estado tratado do sensor de linha
+- Pulsos vermelho, verde e azul do sensor de cor
+- Cor identificada a partir dos pulsos
 - Quantidade de lixeiras coletadas
-- Tempo de funcionamento
-- Ultimo evento registrado
-- Indicador visual de atualizacao
-- Seletor de tema com rosa, azul, verde e amarelo
+- Quantidade de paradas no ciclo
+- Tempo de funcionamento do ESP32
+- Último evento registrado pelo ESP32
 
-## Dados simulados
+Dados como bateria e velocidade real foram removidos porque exigem sensores próprios. Carga e localização permanecem porque são estados operacionais calculados pelas rotinas dos servos.
 
-Os dados iniciais ficam em:
+## Endpoint do ESP32
+
+O app lê os dados no endpoint:
 
 ```text
-data/mockVehicleData.ts
+http://192.168.4.1/status
 ```
 
-A tela alterna automaticamente entre registros simulados a cada 4 segundos. No futuro, esse ponto pode ser substituido por uma chamada HTTP para a API do ESP32.
+O ESP32 deve estar rodando o servidor HTTP e o celular deve estar conectado na rede Wi-Fi criada por ele.
 
-As rotas simuladas seguem a regra da maquete:
+Rede configurada no sketch:
 
-- Rota 1: pegar lixo nas lixeiras.
-- Rota 2: jogar lixo no centro de lixo.
+```text
+Nome: Caminhaozinho-ESP32
+Senha: 12345678
+```
+
+No APK, a tela de conexão permite informar o IP e a senha da rede do ESP32. O botão Wi-Fi abre as configurações de rede do Android; o botão Conectar testa o endpoint montado com o IP informado.
+
+## Código de referência do ESP32
+
+O sketch foi deixado no repositório apenas para não se perder:
+
+```text
+esp32/coletaautomatizada/coletaautomatizada.ino
+```
+
+Na prática, esse código roda no ESP32. O repositório do supervisório apenas consome os dados que o ESP32 disponibiliza.
 
 ## Estrutura
 
@@ -51,17 +60,18 @@ components/
   InfoCard.tsx
   SectionCard.tsx
   StatusCard.tsx
-data/
-  mockVehicleData.ts
+esp32/
+  coletaautomatizada/
+    coletaautomatizada.ino
+services/
+  esp32VehicleData.ts
 types/
   VehicleData.ts
 ```
 
-Os arquivos antigos da versao web estatica (`index.html`, `style.css` e `app.js`) foram preservados no repositorio.
+## Como rodar
 
-## Como Rodar
-
-Instale as dependencias:
+Instale as dependências:
 
 ```bash
 npm install
@@ -78,21 +88,3 @@ Depois, abra no celular Android usando o Expo Go ou execute:
 ```bash
 npm run android
 ```
-
-## Observacao
-
-Este front-end esta preparado para receber integracao real futuramente. O comentario no `App.tsx` indica onde a chamada HTTP para o ESP32 deve entrar.
-
-## Integracao futura com ESP32
-
-Para a integracao real, a opcao escolhida para a maquete e fazer o ESP32 criar a propria rede Wi-Fi em modo Access Point.
-
-Fluxo esperado:
-
-```text
-Celular conectado na rede Wi-Fi do ESP32
-App Expo acessa http://192.168.4.1/status
-ESP32 responde os dados atuais em JSON
-```
-
-O app deve continuar apenas exibindo dados de monitoramento. O controle do caminhãozinho, leitura do sensor de linha, leitura do sensor das lixeiras, rotas e contagem ficam no codigo do ESP32. A API do ESP32 apenas disponibiliza esses dados para a dashboard.

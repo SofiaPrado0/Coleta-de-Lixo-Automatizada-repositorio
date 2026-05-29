@@ -21,8 +21,8 @@ export function StatusCard({
   const color = isOnline ? "#2E9B66" : "#A64B61";
   const label = isOnline ? "Online" : "Offline";
   const message = isOnline
-    ? "Recebendo dados simulados do caminhãozinho"
-    : "Aguardando novo pacote de dados";
+    ? "Recebendo dados reais do ESP32"
+    : "Aguardando conexão com o ESP32";
 
   return (
     <View style={[styles.card, { borderColor, shadowColor }]}>

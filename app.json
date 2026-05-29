@@ -10,10 +10,17 @@
       "backgroundColor": "#FFF5F8"
     },
     "android": {
-      "package": "com.maqueteinteligente.caminhaozinholixo"
+      "package": "com.maqueteinteligente.caminhaozinholixo",
+      "usesCleartextTraffic": true
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "97204415-c44c-44d8-b43e-501b09fa27d6"
+      }
+    },
+    "owner": "sofiaprad0"
   }
 }
