@@ -3,7 +3,7 @@
 #include <WebServer.h>
 
 // ==========================================
-// CONEXAO DE DADOS PARA O APP
+// CONEXAO DE DADOS PARA O SUPERVISORIO
 // ==========================================
 const char* NOME_REDE_DADOS = "Caminhaozinho-ESP32";
 const char* SENHA_REDE_DADOS = "12345678";
@@ -42,13 +42,13 @@ const int pinoS3 = 15;
 const int pinoOUT = 5;
 
 // ==========================================
-// LIMITES DOS SERVOS (Conforme solicitado)
+// LIMITES DOS SERVOS
 // ==========================================
 const int GARRA_ABERTA = 0;
 const int GARRA_FECHADA = 160;
 
 const int COTOVELO_ALTO = 90;
-const int COTOVELO_MEIO = 150; // Posicao para girar o ombro sem arrastar no chao
+const int COTOVELO_MEIO = 150;
 const int COTOVELO_BAIXO = 180;
 
 const int OMBRO_ESQ = 150;
@@ -62,7 +62,7 @@ const int DIR_DIR = 120;
 const int CACAMBA_BAIXA = 180;
 const int CACAMBA_ALTA = 90;
 
-const int VELOCIDADE_BRACO = 20; // Tempo em ms entre cada grau do servo
+const int VELOCIDADE_BRACO = 20;
 
 Servo servoOmbro;
 Servo servoCotovelo;
@@ -73,40 +73,46 @@ Servo servoCacamba;
 int contadorParadas = 0;
 int pulsoVermelho = 0, pulsoVerde = 0, pulsoAzul = 0;
 
+void iniciarConexaoDados();
+void processarConexaoDados();
+void aguardarComServidor(int tempoMs);
+void enviarDadosStatus();
+void enviarRotaNaoEncontrada();
+String montarJsonDados();
+String textoCor(int cor);
+String textoEstadoLinha();
+void frente();
+void pararMotores();
+void moverServoGradual(Servo &motor, int inicio, int fim);
+int lerCor();
+void rotinaColeta();
+void rotinaDespejoFinal();
+
 void setup() {
   Serial.begin(115200);
 
   inicioFuncionamento = millis();
   iniciarConexaoDados();
 
+  // 1. LIGA MOTORES DE TRACAO DC
   pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
   pararMotores();
 
+  // 2. LIGA SENSORES INFRAVERMELHOS
   pinMode(pinoIR_Esq, INPUT);
   pinMode(pinoIR_Dir, INPUT);
 
-  pinMode(pinoS2, OUTPUT);
-  pinMode(pinoS3, OUTPUT);
-  pinMode(pinoOUT, INPUT);
-
+  // Configura os timers do PWM
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2);
 
-  servoOmbro.attach(pinoOmbro, 500, 2400);
-  servoCotovelo.attach(pinoCotovelo, 500, 2400);
-  servoGarra.attach(pinoGarra, 500, 2400);
+  // 3. LIGA A DIRECAO JUNTO COM O SISTEMA
   servoDirecao.attach(pinoDirecao, 500, 2400);
-  servoCacamba.attach(pinoCacamba, 500, 2400);
-
-  // Posicoes Iniciais
-  servoOmbro.write(OMBRO_RETO);
-  servoCotovelo.write(COTOVELO_ALTO);
-  servoGarra.write(GARRA_ABERTA);
   servoDirecao.write(DIR_RETO);
-  servoCacamba.write(CACAMBA_BAIXA);
 
+  // Braco mecanico, cacamba e sensor de cor comecam desativados
   aguardarComServidor(2000);
 }
 
@@ -119,22 +125,25 @@ void loop() {
   ultimaLeituraIR_Dir = leituraDir;
 
   // ---------------------------------------------------------
-  // SEGUIDOR DE LINHA
+  // SEGUIDOR DE LINHA (Logica: LOW = Pista Preta | HIGH = Linha Branca)
   // ---------------------------------------------------------
   if (leituraEsq == LOW && leituraDir == LOW) {
+    // Ambos na pista preta: anda reto
     servoDirecao.write(DIR_RETO);
     frente();
   }
   else if (leituraEsq == HIGH && leituraDir == LOW) {
+    // Sensor esquerdo detectou branco: corrige para a esquerda
     servoDirecao.write(DIR_ESQ);
     frente();
   }
   else if (leituraEsq == LOW && leituraDir == HIGH) {
+    // Sensor direito detectou branco: corrige para a direita
     servoDirecao.write(DIR_DIR);
     frente();
   }
   else if (leituraEsq == HIGH && leituraDir == HIGH) {
-    // MARCACAO DE PARADA DETECTADA
+    // Ambos em HIGH: Cruzamento / Marcacao branca transversal detectada
     pararMotores();
     aguardarComServidor(1000);
 
@@ -143,11 +152,11 @@ void loop() {
     if (contadorParadas == 1 || contadorParadas == 2) {
       rotinaColeta();
       frente();
-      aguardarComServidor(800); // Passa reto pela marcacao para nao ler duas vezes
+      aguardarComServidor(800); // Avanca para sair da marcacao branca
     }
     else if (contadorParadas == 3) {
       rotinaDespejoFinal();
-      contadorParadas = 0; // Reseta para continuar o loop infinito
+      contadorParadas = 0;
       frente();
       aguardarComServidor(800);
     }
@@ -155,7 +164,7 @@ void loop() {
 }
 
 // ==========================================
-// FUNCAO NOVA: CONEXAO DOS DADOS
+// FUNCOES DA CONEXAO DE DADOS
 // O app le: http://192.168.4.1/status
 // ==========================================
 void iniciarConexaoDados() {
@@ -278,23 +287,29 @@ void moverServoGradual(Servo &motor, int inicio, int fim) {
 }
 
 // ==========================================
-// LEITURA DO SENSOR DE COR
-// Retorna: 1 (Azul), 2 (Amarelo), 3 (Verde), 0 (Erro)
+// LEITURA DO SENSOR DE COR (Ativacao por demanda)
 // ==========================================
 int lerCor() {
+  pinMode(pinoS2, OUTPUT);
+  pinMode(pinoS3, OUTPUT);
+  pinMode(pinoOUT, INPUT);
+
   digitalWrite(pinoS2, LOW);   digitalWrite(pinoS3, LOW);
-  pulsoVermelho = pulseIn(pinoOUT, LOW); delay(50);
+  pulsoVermelho = pulseIn(pinoOUT, LOW); aguardarComServidor(50);
   digitalWrite(pinoS2, HIGH);  digitalWrite(pinoS3, HIGH);
-  pulsoVerde = pulseIn(pinoOUT, LOW); delay(50);
+  pulsoVerde = pulseIn(pinoOUT, LOW); aguardarComServidor(50);
   digitalWrite(pinoS2, LOW);   digitalWrite(pinoS3, HIGH);
-  pulsoAzul = pulseIn(pinoOUT, LOW); delay(50);
+  pulsoAzul = pulseIn(pinoOUT, LOW); aguardarComServidor(50);
 
-  if (pulsoVerde > 10000 && pulsoAzul > 10000) return 0; // Vazio/Preto
-  if (pulsoVermelho > 10000 && pulsoVerde < 10) return 1; // Azul
-  if (pulsoVerde > 10000 && pulsoVermelho < 10 && pulsoAzul < 10) return 2; // Amarelo
-  if (pulsoVerde > 10000 && pulsoVermelho >= 10 && pulsoVermelho < 100) return 3; // Verde
+  pinMode(pinoS2, INPUT);
+  pinMode(pinoS3, INPUT);
 
-  return 0; // Indeterminado
+  if (pulsoVerde > 10000 && pulsoAzul > 10000) return 0;
+  if (pulsoVermelho > 10000 && pulsoVerde < 10) return 1;
+  if (pulsoVerde > 10000 && pulsoVermelho < 10 && pulsoAzul < 10) return 2;
+  if (pulsoVerde > 10000 && pulsoVermelho >= 10 && pulsoVermelho < 100) return 3;
+
+  return 0;
 }
 
 // ==========================================
@@ -305,50 +320,53 @@ void rotinaColeta() {
   localizacaoAtual = "Caminho das casas";
   ultimoEvento = "Iniciando coleta";
 
-  // 1. Baixar o braco ate o chao
+  servoOmbro.attach(pinoOmbro, 500, 2400);
+  servoCotovelo.attach(pinoCotovelo, 500, 2400);
+  servoGarra.attach(pinoGarra, 500, 2400);
+
+  servoOmbro.write(OMBRO_RETO);
+  servoCotovelo.write(COTOVELO_ALTO);
+  servoGarra.write(GARRA_ABERTA);
+  aguardarComServidor(200);
+
   moverServoGradual(servoCotovelo, COTOVELO_ALTO, COTOVELO_BAIXO);
   aguardarComServidor(500);
 
-  // 2. Ler a cor da lixeira
   int corIdentificada = lerCor();
   ultimaCorIdentificada = corIdentificada;
 
-  // 3. Fechar a garra
   moverServoGradual(servoGarra, GARRA_ABERTA, GARRA_FECHADA);
   aguardarComServidor(500);
 
-  // 4. Levantar um pouco (sair do chao)
   moverServoGradual(servoCotovelo, COTOVELO_BAIXO, COTOVELO_MEIO);
   aguardarComServidor(500);
 
-  // 5. Girar ombro para a cacamba correspondente
-  int alvoOmbro = OMBRO_RETO; // Padrao
-  if (corIdentificada == 1) alvoOmbro = OMBRO_ESQ;      // Azul -> Cacamba Esquerda
-  else if (corIdentificada == 2) alvoOmbro = OMBRO_RETO; // Amarelo -> Cacamba Central
-  else if (corIdentificada == 3) alvoOmbro = OMBRO_DIR;  // Verde -> Cacamba Direita
+  int alvoOmbro = OMBRO_RETO;
+  if (corIdentificada == 1) alvoOmbro = OMBRO_ESQ;
+  else if (corIdentificada == 2) alvoOmbro = OMBRO_RETO;
+  else if (corIdentificada == 3) alvoOmbro = OMBRO_DIR;
 
   moverServoGradual(servoOmbro, OMBRO_RETO, alvoOmbro);
   aguardarComServidor(500);
 
-  // 6. Levantar o braco para o lixo cair na cacamba
   moverServoGradual(servoCotovelo, COTOVELO_MEIO, COTOVELO_ALTO);
-  aguardarComServidor(1000); // Tempo para o lixo cair
+  aguardarComServidor(1000);
 
-  // 7. Baixar o braco novamente ate o chao
   moverServoGradual(servoCotovelo, COTOVELO_ALTO, COTOVELO_BAIXO);
   aguardarComServidor(500);
 
-  // 8. Abrir a garra para soltar a lixeira
   moverServoGradual(servoGarra, GARRA_FECHADA, GARRA_ABERTA);
   aguardarComServidor(500);
 
-  // 9. Levantar o braco para a posicao inicial
   moverServoGradual(servoCotovelo, COTOVELO_BAIXO, COTOVELO_ALTO);
   aguardarComServidor(500);
 
-  // 10. Voltar o ombro para o centro
   moverServoGradual(servoOmbro, alvoOmbro, OMBRO_RETO);
   aguardarComServidor(500);
+
+  servoOmbro.detach();
+  servoCotovelo.detach();
+  servoGarra.detach();
 
   lixeirasColetadas++;
   cargaAtual = true;
@@ -362,13 +380,17 @@ void rotinaDespejoFinal() {
   localizacaoAtual = "Centro de lixo";
   ultimoEvento = "Despejando carga no centro de lixo";
 
-  // Gira a cacamba para despejar (180 para 90)
-  moverServoGradual(servoCacamba, CACAMBA_BAIXA, CACAMBA_ALTA);
-  aguardarComServidor(3000); // Aguarda o lixo cair
+  servoCacamba.attach(pinoCacamba, 500, 2400);
+  servoCacamba.write(CACAMBA_BAIXA);
+  aguardarComServidor(200);
 
-  // Retorna a cacamba para a posicao normal (90 para 180)
+  moverServoGradual(servoCacamba, CACAMBA_BAIXA, CACAMBA_ALTA);
+  aguardarComServidor(3000);
+
   moverServoGradual(servoCacamba, CACAMBA_ALTA, CACAMBA_BAIXA);
-  aguardarComServidor(1000);
+  aguardarComServidor(500);
+
+  servoCacamba.detach();
 
   cargaAtual = false;
   localizacaoAtual = "Centro de lixo";
