@@ -1,58 +1,67 @@
-# Caminhãozinho de Lixo - Supervisório Mobile
+# Caminhãozinho de Lixo - Supervisório Mobile e Web
 
-Aplicativo mobile em React Native com Expo para receber e exibir dados reais do ESP32 do caminhãozinho de lixo.
+Aplicativo em React Native (Expo) criado para o projeto escolar de sustentabilidade. O sistema recebe e exibe dados reais do ESP32 embarcado no carrinho de lixo seletivo, apresentando os dados através de um dashboard moderno e temático.
 
-O supervisório não usa dados simulados. Quando o ESP32 não está conectado ou não responde, o app fica offline aguardando a conexão.
+O supervisório se conecta ao ESP32 via rede Wi-Fi local para leitura de dados. Caso o ESP32 não esteja conectado ou não responda, o app fica offline aguardando a conexão, mantendo a interface interativa.
+
+## Novidades Visuais e Funcionalidades
+
+O projeto passou por um redesenho completo para refletir a temática de sustentabilidade e coleta inteligente:
+- **Temas Sustentáveis**: 4 paletas de cores disponíveis (Floresta, Oceano, Solar e Terra).
+- **Modo Web**: O dashboard agora pode ser acessado pelo navegador, facilitando apresentações na maquete.
+- **Agenda de Coletas**: Adição de uma seção ilustrativa (mockada) mostrando a "Próxima coleta na sua rua" e um calendário semanal para demonstrar a aplicação do aplicativo na vida real de uma cidade inteligente.
 
 ## Dados exibidos
 
-O app exibe apenas dados que o ESP32 consegue ler ou calcular a partir do código embarcado:
+O app exibe os dados lidos ou calculados pelo código embarcado no ESP32:
 
 - Estado atual da rotina
-- Rota atual calculada pelo ESP32
+- Rota atual (Destino)
 - Carga inferida pelo fim da rotina de coleta/despejo
-- Localização operacional inferida pela rotina dos servos
-- Leituras digitais dos sensores IR esquerdo e direito
-- Estado tratado do sensor de linha
-- Pulsos vermelho, verde e azul do sensor de cor
-- Cor identificada a partir dos pulsos
-- Quantidade de lixeiras coletadas
-- Quantidade de paradas no ciclo
-- Tempo de funcionamento do ESP32
-- Último evento registrado pelo ESP32
-
-Dados como bateria e velocidade real foram removidos porque exigem sensores próprios. Carga e localização permanecem porque são estados operacionais calculados pelas rotinas dos servos.
+- Leituras dos sensores IR (linha)
+- Cor identificada a partir dos pulsos (Sensor RGB)
+- Quantidade de lixeiras coletadas e paradas no ciclo
+- Tempo de funcionamento e último evento registrado
 
 ## Endpoint do ESP32
 
 O app lê os dados no endpoint:
+`http://192.168.4.1/status`
 
-```text
-http://192.168.4.1/status
-```
+O ESP32 deve estar rodando o servidor HTTP e o dispositivo rodando o app (celular ou notebook) deve estar conectado na rede Wi-Fi criada por ele.
 
-O ESP32 deve estar rodando o servidor HTTP e o celular deve estar conectado na rede Wi-Fi criada por ele.
+Rede padrão configurada no hardware:
+- Nome: Caminhaozinho-ESP32
+- Senha: 12345678
 
-Rede configurada no sketch:
-
-```text
-Nome: Caminhaozinho-ESP32
-Senha: 12345678
-```
-
-No APK, a tela de conexão permite informar o IP e a senha da rede do ESP32. O botão Wi-Fi abre as configurações de rede do Android; o botão Conectar testa o endpoint montado com o IP informado.
+A tela de conexão permite informar o IP caso ele mude. O botão de ajustes Wi-Fi abre as configurações de rede do dispositivo.
 
 ## Código de referência do ESP32
 
-O sketch foi deixado no repositório apenas para não se perder:
+O código fonte em C++ que roda no microcontrolador foi guardado no repositório para referência:
+`esp32/coletaautomatizada/coletaautomatizada.ino`
 
-```text
-esp32/coletaautomatizada/coletaautomatizada.ino
+## Como rodar o aplicativo
+
+Para testar no seu computador (Web) ou celular:
+
+1. Instale as dependências do projeto:
+```bash
+npm install
 ```
 
-Na prática, esse código roda no ESP32. O repositório do supervisório apenas consome os dados que o ESP32 disponibiliza.
+2. Para rodar diretamente no navegador (recomendado para ver as mudanças e uso em notebook):
+```bash
+npx expo start --web
+```
 
-## Estrutura
+3. Para rodar no celular (App Expo Go):
+```bash
+npx expo start
+```
+Após executar, leia o QR Code gerado pelo terminal com a câmera do seu aplicativo Expo Go.
+
+## Estrutura do Código
 
 ```text
 App.tsx
@@ -67,24 +76,4 @@ services/
   esp32VehicleData.ts
 types/
   VehicleData.ts
-```
-
-## Como rodar
-
-Instale as dependências:
-
-```bash
-npm install
-```
-
-Inicie o Expo:
-
-```bash
-npm start
-```
-
-Depois, abra no celular Android usando o Expo Go ou execute:
-
-```bash
-npm run android
 ```

@@ -24,49 +24,53 @@ import {
 } from "./services/esp32VehicleData";
 
 const THEMES = {
-  pink: {
-    label: "Rosa",
-    accent: "#D9447C",
-    secondary: "#B84F8E",
-    tertiary: "#C65A75",
-    sensor: "#8F6FBC",
-    background: "#FFF5F8",
-    soft: "#FFF0F5",
-    border: "#F7D7E3",
-    shadow: "#D9447C"
-  },
-  blue: {
-    label: "Azul",
-    accent: "#2F80ED",
-    secondary: "#3A66D7",
-    tertiary: "#2796B3",
-    sensor: "#4769E8",
-    background: "#F2F7FF",
-    soft: "#EAF2FF",
-    border: "#CFE0FF",
-    shadow: "#2F80ED"
-  },
-  green: {
-    label: "Verde",
-    accent: "#2E9B66",
+  floresta: {
+    label: "Floresta",
+    accent: "#1B9C5A",
     secondary: "#168A75",
     tertiary: "#50A05A",
     sensor: "#2F7D5E",
     background: "#F3FBF6",
     soft: "#E9F7EF",
     border: "#CDEBD8",
-    shadow: "#2E9B66"
+    shadow: "#2E9B66",
+    headerBg: "#0F4D2E"
   },
-  yellow: {
-    label: "Amarelo",
-    accent: "#C78516",
+  oceano: {
+    label: "Oceano",
+    accent: "#1565C0",
+    secondary: "#0D47A1",
+    tertiary: "#1976D2",
+    sensor: "#4769E8",
+    background: "#F2F7FF",
+    soft: "#EAF2FF",
+    border: "#CFE0FF",
+    shadow: "#2F80ED",
+    headerBg: "#0A3268"
+  },
+  solar: {
+    label: "Solar",
+    accent: "#D4960C",
     secondary: "#B7791F",
     tertiary: "#D29A22",
     sensor: "#A66B00",
     background: "#FFF9E8",
     soft: "#FFF2C2",
     border: "#F2D98B",
-    shadow: "#C78516"
+    shadow: "#C78516",
+    headerBg: "#6B4106"
+  },
+  terra: {
+    label: "Terra",
+    accent: "#8B5E3C",
+    secondary: "#6D4C41",
+    tertiary: "#8D6E63",
+    sensor: "#5D4037",
+    background: "#F5F1EE",
+    soft: "#EFEBE9",
+    border: "#D7CCC8",
+    shadow: "#8B5E3C",
+    headerBg: "#3D2815"
   }
 } as const;
 
@@ -75,6 +79,16 @@ type ThemeName = keyof typeof THEMES;
 const THEME_KEYS = Object.keys(THEMES) as ThemeName[];
 const DEFAULT_ESP32_IP = ESP32_STATUS_URL.replace("http://", "").replace("/status", "");
 const DEFAULT_ESP32_PASSWORD = "12345678";
+
+const MOCK_SCHEDULE = [
+  { id: "1", day: "Hoje", time: "08:30", type: "Reciclavel", color: "#1565C0", isNext: true },
+  { id: "2", day: "Hoje", time: "14:00", type: "Organico", color: "#6D4C41", isNext: false },
+  { id: "3", day: "Amanha", time: "08:30", type: "Papel e Papelao", color: "#D4960C", isNext: false },
+  { id: "4", day: "Quinta", time: "14:00", type: "Metal e Vidro", color: "#546E7A", isNext: false },
+  { id: "5", day: "Sexta", time: "08:30", type: "Nao reciclavel", color: "#616161", isNext: false }
+];
+
+const MOCK_NEXT_COLLECTION = { time: "08:30", type: "Reciclavel", countdown: "2h 15min", street: "Rua das Flores, 120" };
 
 const buildEsp32StatusUrl = (ip: string) => {
   const host = ip
@@ -110,7 +124,7 @@ const getColorSensorHelper = (colorCode: number) => {
 
 export default function App() {
   const [vehicleData, setVehicleData] = useState(createOfflineVehicleData);
-  const [selectedTheme, setSelectedTheme] = useState<ThemeName>("pink");
+  const [selectedTheme, setSelectedTheme] = useState<ThemeName>("floresta");
   const [esp32Ip, setEsp32Ip] = useState(DEFAULT_ESP32_IP);
   const [esp32Password, setEsp32Password] = useState(DEFAULT_ESP32_PASSWORD);
   const [statusUrl, setStatusUrl] = useState(ESP32_STATUS_URL);
@@ -214,656 +228,581 @@ export default function App() {
 
   const theme = THEMES[selectedTheme];
   const isOnline = vehicleData.connectionStatus === "online";
-  const stateColor = !isOnline || vehicleData.state === "Parado" ? "#A64B61" : theme.accent;
+  const stateColor = !isOnline || vehicleData.state === "Parado" ? "#C0392B" : theme.accent;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <StatusBar style="dark" />
-      <ScrollView
-        style={[styles.container, { backgroundColor: theme.background }]}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View
-            style={[
-              styles.brandIcon,
-              { borderColor: theme.border, shadowColor: theme.shadow }
-            ]}
-          >
-            <MaterialCommunityIcons name="truck-outline" size={27} color={theme.accent} />
+    <View style={[styles.root, { backgroundColor: theme.headerBg, paddingTop: Platform.OS === "android" ? 30 : 0 }]}>
+      <StatusBar style="light" />
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
+          
+          <View style={[styles.headerSection, { backgroundColor: theme.headerBg }]}>
+            <MaterialCommunityIcons name="recycle" size={48} color="#FFFFFF" />
+            <Text style={styles.eyebrow}>ECOBOT</Text>
+            <Text style={styles.title}>Coleta Inteligente</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>ESP32 {isOnline ? "CONECTADO" : "DESCONECTADO"}</Text>
+            </View>
           </View>
 
-          <View style={styles.headerText}>
-            <Text style={styles.eyebrow}>Maquete inteligente</Text>
-            <Text style={styles.title}>Caminhãozinho de Lixo</Text>
-          </View>
-        </View>
-
-        <View
-          style={[
-            styles.themeSelector,
-            { borderColor: theme.border, shadowColor: theme.shadow }
-          ]}
-        >
-          <View style={styles.themeSelectorLabel}>
-            <Ionicons name="color-palette-outline" size={16} color={theme.accent} />
-            <Text style={styles.themeSelectorText}>Tema</Text>
-          </View>
-
-          <View style={styles.themeButtons}>
-            {THEME_KEYS.map((themeName) => {
-              const option = THEMES[themeName];
-              const isSelected = selectedTheme === themeName;
-
-              return (
-                <Pressable
-                  key={themeName}
-                  accessibilityLabel={`Selecionar tema ${option.label}`}
-                  accessibilityRole="button"
-                  onPress={() => setSelectedTheme(themeName)}
-                  style={[
-                    styles.themeButton,
-                    {
-                      backgroundColor: option.soft,
-                      borderColor: isSelected ? option.accent : "transparent"
-                    }
-                  ]}
-                >
-                  <View style={[styles.themeDot, { backgroundColor: option.accent }]} />
-                  <Text
+          <View style={[styles.bodySection, { backgroundColor: theme.background }]}>
+            
+            <View style={[styles.themeSelector, { borderColor: theme.border, shadowColor: theme.shadow }]}>
+              {THEME_KEYS.map((tKey) => {
+                const t = THEMES[tKey];
+                const isSelected = selectedTheme === tKey;
+                return (
+                  <Pressable
+                    key={tKey}
+                    onPress={() => setSelectedTheme(tKey)}
                     style={[
-                      styles.themeButtonText,
-                      isSelected && { color: option.accent }
+                      styles.themePill,
+                      isSelected && { backgroundColor: t.accent }
                     ]}
                   >
-                    {option.label}
+                    <Text style={[styles.themePillText, isSelected && styles.themePillTextSelected]}>
+                      {t.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={[styles.heroCard, { backgroundColor: theme.accent }]}>
+              <View style={styles.heroCardHeader}>
+                <MaterialCommunityIcons name="calendar-clock" size={24} color="#FFFFFF" />
+                <Text style={styles.heroCardTitle}>Próxima coleta na sua rua</Text>
+              </View>
+              <Text style={styles.heroCardTime}>{MOCK_NEXT_COLLECTION.time}</Text>
+              <View style={styles.heroCardBadge}>
+                <Text style={[styles.heroCardBadgeText, { color: theme.accent }]}>{MOCK_NEXT_COLLECTION.type}</Text>
+              </View>
+              <Text style={styles.heroCardStreet}>{MOCK_NEXT_COLLECTION.street}</Text>
+              <Text style={styles.heroCardCountdown}>Chega em {MOCK_NEXT_COLLECTION.countdown}</Text>
+            </View>
+
+            <SectionCard
+              title="Agenda de coleta"
+              icon="calendar-month-outline"
+              accentColor={theme.accent}
+              borderColor={theme.border}
+              shadowColor={theme.shadow}
+            >
+              {MOCK_SCHEDULE.map((item) => (
+                <View key={item.id} style={styles.scheduleItem}>
+                  <View style={[styles.scheduleDot, { backgroundColor: item.color }]} />
+                  <View style={styles.scheduleContent}>
+                    <Text style={styles.scheduleDay}>{item.day}</Text>
+                    <Text style={styles.scheduleType}>{item.type}</Text>
+                  </View>
+                  <View style={styles.scheduleTimeContainer}>
+                    <Text style={styles.scheduleTime}>{item.time}</Text>
+                    {item.isNext && (
+                      <View style={[styles.scheduleNextBadge, { backgroundColor: theme.accent }]}>
+                        <Text style={styles.scheduleNextText}>Próximo</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </SectionCard>
+
+            <StatusCard
+              status={vehicleData.connectionStatus}
+              updatedAt={vehicleData.updatedAt ? new Date(vehicleData.updatedAt) : null}
+              borderColor={theme.border}
+              shadowColor={theme.shadow}
+            />
+
+            <SectionCard
+              title="Conexão com ESP32"
+              icon="wifi"
+              accentColor={theme.accent}
+              borderColor={theme.border}
+              shadowColor={theme.shadow}
+            >
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Endereço IP (sem http://)</Text>
+                <TextInput
+                  style={[styles.input, { borderColor: theme.border, backgroundColor: theme.soft }]}
+                  value={esp32Ip}
+                  onChangeText={setEsp32Ip}
+                  placeholder="Ex: 192.168.0.100"
+                  keyboardType="numeric"
+                  placeholderTextColor="#A3B5AA"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Senha do Ponto de Acesso</Text>
+                <TextInput
+                  style={[styles.input, { borderColor: theme.border, backgroundColor: theme.soft }]}
+                  value={esp32Password}
+                  onChangeText={setEsp32Password}
+                  placeholder="Senha do ESP32"
+                  secureTextEntry
+                  placeholderTextColor="#A3B5AA"
+                />
+              </View>
+
+              <View style={styles.buttonGroup}>
+                <Pressable
+                  style={[
+                    styles.primaryButton,
+                    { backgroundColor: theme.accent },
+                    isTestingConnection && { opacity: 0.7 }
+                  ]}
+                  onPress={handleConnect}
+                  disabled={isTestingConnection}
+                >
+                  <MaterialCommunityIcons name="connection" size={20} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>
+                    {isTestingConnection ? "Conectando..." : "Testar Conexão"}
                   </Text>
                 </Pressable>
-              );
-            })}
-          </View>
-        </View>
 
-        <StatusCard
-          status={vehicleData.connectionStatus}
-          updatedAt={vehicleData.updatedAt}
-          borderColor={theme.border}
-          shadowColor={theme.shadow}
-          softBackground={theme.soft}
-        />
+                <Pressable
+                  style={[styles.secondaryButton, { borderColor: theme.accent }]}
+                  onPress={handleOpenWifiSettings}
+                >
+                  <Ionicons name="settings-outline" size={18} color={theme.accent} />
+                  <Text style={[styles.secondaryButtonText, { color: theme.accent }]}>
+                    Ajustes de Wi-Fi
+                  </Text>
+                </Pressable>
+              </View>
 
-        <View
-          style={[
-            styles.connectionCard,
-            { borderColor: theme.border, shadowColor: theme.shadow }
-          ]}
-        >
-          <View style={styles.connectionHeader}>
-            <View style={styles.connectionTitleRow}>
-              <Ionicons name="wifi-outline" size={18} color={theme.accent} />
-              <Text style={styles.connectionTitle}>Conexão ESP32</Text>
-            </View>
-            <View style={[styles.connectionBadge, { backgroundColor: theme.soft }]}>
-              <View
-                style={[
-                  styles.connectionBadgeDot,
-                  { backgroundColor: isOnline ? "#2E9B66" : "#A64B61" }
-                ]}
-              />
-              <Text style={styles.connectionBadgeText}>{connectionMessage}</Text>
-            </View>
-          </View>
+              <View style={[styles.feedbackBox, { backgroundColor: theme.soft, borderColor: theme.border }]}>
+                <MaterialCommunityIcons
+                  name={isOnline ? "check-circle" : "alert-circle"}
+                  size={16}
+                  color={theme.accent}
+                />
+                <Text style={[styles.feedbackText, { color: theme.accent }]}>
+                  {connectionMessage}
+                </Text>
+              </View>
+            </SectionCard>
 
-          <View style={styles.connectionMeta}>
-            <Text style={styles.connectionMetaText}>Rede: Caminhaozinho-ESP32</Text>
-          </View>
-
-          <View style={styles.connectionFields}>
-            <View style={styles.connectionField}>
-              <Text style={styles.connectionLabel}>IP</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="default"
-                onChangeText={setEsp32Ip}
-                placeholder={DEFAULT_ESP32_IP}
-                placeholderTextColor="#B7A3AD"
-                style={[styles.connectionInput, { borderColor: theme.border }]}
-                value={esp32Ip}
-              />
-            </View>
-
-            <View style={styles.connectionField}>
-              <Text style={styles.connectionLabel}>Senha</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                onChangeText={setEsp32Password}
-                placeholder={DEFAULT_ESP32_PASSWORD}
-                placeholderTextColor="#B7A3AD"
-                style={[styles.connectionInput, { borderColor: theme.border }]}
-                value={esp32Password}
-              />
-            </View>
-          </View>
-
-          <View style={styles.connectionActions}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={handleOpenWifiSettings}
-              style={[
-                styles.wifiButton,
-                { borderColor: theme.border, backgroundColor: theme.soft }
-              ]}
+            <SectionCard
+              title="Estado atual"
+              icon="car-electric"
+              accentColor={theme.accent}
+              borderColor={theme.border}
+              shadowColor={theme.shadow}
             >
-              <Ionicons name="settings-outline" size={17} color={theme.accent} />
-              <Text style={[styles.wifiButtonText, { color: theme.accent }]}>Wi-Fi</Text>
-            </Pressable>
+              <InfoCard
+                label="Status de Operação"
+                value={vehicleData.state}
+                icon="robot-outline"
+                accentColor={stateColor}
+                borderColor={theme.border}
+                shadowColor={theme.shadow}
+              />
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <InfoCard
+                    label="Rota / Destino"
+                    value={vehicleData.route.id}
+                    icon="map-marker-path"
+                    accentColor={theme.accent}
+                    borderColor={theme.border}
+                    shadowColor={theme.shadow}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <InfoCard
+                    label="Tempo Ligado"
+                    value={formatUptime(vehicleData.uptimeMinutes)}
+                    icon="clock-outline"
+                    accentColor={theme.secondary}
+                    borderColor={theme.border}
+                    shadowColor={theme.shadow}
+                  />
+                </View>
+              </View>
+            </SectionCard>
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={isTestingConnection}
-              onPress={handleConnect}
-              style={[
-                styles.connectButton,
-                { backgroundColor: theme.accent },
-                isTestingConnection && styles.connectButtonDisabled
-              ]}
+            <SectionCard
+              title="Resumo dos sensores"
+              icon="memory"
+              accentColor={theme.accent}
+              borderColor={theme.border}
+              shadowColor={theme.shadow}
             >
-              <Ionicons name="radio-outline" size={17} color="#FFFFFF" />
-              <Text style={styles.connectButtonText}>
-                {isTestingConnection ? "Testando" : "Conectar"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <InfoCard
+                    label="Carga"
+                    value={vehicleData.load}
+                    icon="dump-truck"
+                    accentColor={theme.sensor}
+                    borderColor={theme.border}
+                    shadowColor={theme.shadow}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <InfoCard
+                    label="Lixeiras"
+                    value={String(vehicleData.trashBinsCollected)}
+                    helper="Coletadas"
+                    icon="delete-empty"
+                    accentColor={theme.tertiary}
+                    borderColor={theme.border}
+                    shadowColor={theme.shadow}
+                  />
+                </View>
+              </View>
+              
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <InfoCard
+                    label="Cor (Sensor)"
+                    value={vehicleData.colorSensor.detectedColor}
+                    helper={getColorSensorHelper(vehicleData.colorSensor.colorCode)}
+                    icon="palette-outline"
+                    accentColor="#E67E22"
+                    borderColor={theme.border}
+                    shadowColor={theme.shadow}
+                  />
+                </View>
+                <View style={styles.halfWidth}>
+                  <InfoCard
+                    label="Linha"
+                    value={vehicleData.lineSensors.status}
+                    icon="road-variant"
+                    accentColor="#8E44AD"
+                    borderColor={theme.border}
+                    shadowColor={theme.shadow}
+                  />
+                </View>
+              </View>
+            </SectionCard>
 
-        <View style={[styles.grid, isCompact && styles.gridCompact]}>
-          <InfoCard
-            label="Sensor de linha"
-            value={isOnline ? vehicleData.lineSensors.status : "--"}
-            helper={
-              isOnline
-                ? `Esq ${formatDigitalSensorValue(
-                    vehicleData.lineSensors.left
-                  )} | Dir ${formatDigitalSensorValue(vehicleData.lineSensors.right)}`
-                : "Sem leitura"
-            }
-            icon="git-branch-outline"
-            accentColor={theme.accent}
-            borderColor={theme.border}
-            shadowColor={theme.shadow}
-          />
+            <SectionCard
+              title="Último evento"
+              icon="history"
+              accentColor={theme.accent}
+              borderColor={theme.border}
+              shadowColor={theme.shadow}
+            >
+              <Text style={styles.eventText}>{vehicleData.lastEvent}</Text>
+            </SectionCard>
 
-          <InfoCard
-            label="Cor detectada"
-            value={isOnline ? vehicleData.colorSensor.detectedColor : "--"}
-            helper={
-              isOnline
-                ? getColorSensorHelper(vehicleData.colorSensor.colorCode)
-                : "Sem leitura"
-            }
-            icon="color-palette-outline"
-            accentColor={theme.secondary}
-            borderColor={theme.border}
-            shadowColor={theme.shadow}
-          />
-
-          <InfoCard
-            label="Pulsos RGB"
-            value={
-              isOnline
-                ? `${vehicleData.colorSensor.redPulse}/${vehicleData.colorSensor.greenPulse}/${vehicleData.colorSensor.bluePulse}`
-                : "--"
-            }
-            helper="Vermelho | Verde | Azul"
-            icon="pulse-outline"
-            accentColor={theme.tertiary}
-            borderColor={theme.border}
-            shadowColor={theme.shadow}
-          />
-
-          <InfoCard
-            label="Rota"
-            value={isOnline ? vehicleData.route.id : "--"}
-            helper={isOnline ? vehicleData.route.purpose : "Sem leitura"}
-            icon="map-outline"
-            accentColor={theme.sensor}
-            borderColor={theme.border}
-            shadowColor={theme.shadow}
-          />
-
-          <InfoCard
-            label="Carga"
-            value={isOnline ? vehicleData.load : "--"}
-            helper={isOnline ? "Inferida pelo fim da coleta/despejo" : "Sem leitura"}
-            icon="cube-outline"
-            accentColor={theme.accent}
-            borderColor={theme.border}
-            shadowColor={theme.shadow}
-          />
-
-          <InfoCard
-            label="Localização"
-            value={isOnline ? vehicleData.location : "--"}
-            helper={isOnline ? "Inferida pela rotina dos servos" : "Sem leitura"}
-            icon="location-outline"
-            accentColor={theme.secondary}
-            borderColor={theme.border}
-            shadowColor={theme.shadow}
-          />
-        </View>
-
-        <SectionCard
-          title="Estado atual"
-          icon="analytics-outline"
-          accentColor={stateColor}
-          borderColor={theme.border}
-          shadowColor={theme.shadow}
-        >
-          <View style={styles.stateRow}>
-            <View style={[styles.stateMarker, { backgroundColor: `${stateColor}18` }]}>
-              <Ionicons name="navigate-outline" size={28} color={stateColor} />
+            <View style={styles.footer}>
+              <View style={[styles.footerPill, { backgroundColor: theme.soft, borderColor: theme.border }]}>
+                <View style={styles.pulseContainer}>
+                  <Animated.View
+                    style={[
+                      styles.pulseCircle,
+                      {
+                        backgroundColor: isOnline ? theme.accent : "#C0392B",
+                        opacity: pulseOpacity,
+                        transform: [{ scale: pulseScale }]
+                      }
+                    ]}
+                  />
+                  <View style={[styles.pulseCore, { backgroundColor: isOnline ? theme.accent : "#C0392B" }]} />
+                </View>
+                <Text style={styles.footerText}>{updateLabel}</Text>
+              </View>
             </View>
 
-            <View style={styles.stateTextGroup}>
-              <Text style={[styles.stateValue, { color: stateColor }]}>
-                {vehicleData.state}
-              </Text>
-              <Text style={styles.stateDescription}>
-                {isOnline
-                  ? "Estado calculado pelo ESP32 a partir da rota e dos sensores."
-                  : "Conecte o celular na rede Wi-Fi do ESP32 para receber os dados."}
-              </Text>
-            </View>
           </View>
-        </SectionCard>
-
-        <SectionCard
-          title="Resumo dos sensores"
-          icon="stats-chart-outline"
-          accentColor={theme.secondary}
-          borderColor={theme.border}
-          shadowColor={theme.shadow}
-        >
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryNumber}>
-                {isOnline ? vehicleData.trashBinsCollected : "--"}
-              </Text>
-              <Text style={styles.summaryLabel}>Lixeiras coletadas</Text>
-            </View>
-
-            <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryNumber}>
-                {isOnline ? vehicleData.stopCount : "--"}
-              </Text>
-              <Text style={styles.summaryLabel}>Paradas no ciclo</Text>
-            </View>
-          </View>
-
-          <View style={[styles.summaryDividerHorizontal, { backgroundColor: theme.border }]} />
-
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryNumber}>
-              {isOnline ? formatUptime(vehicleData.uptimeMinutes) : "--"}
-            </Text>
-            <Text style={styles.summaryLabel}>Funcionamento do ESP32</Text>
-          </View>
-        </SectionCard>
-
-        <SectionCard
-          title="Último evento"
-          icon="list-outline"
-          accentColor={theme.accent}
-          borderColor={theme.border}
-          shadowColor={theme.shadow}
-        >
-          <Text style={styles.eventText}>{vehicleData.lastEvent}</Text>
-        </SectionCard>
-
-        <View
-          style={[
-            styles.updateIndicator,
-            { borderColor: theme.border, shadowColor: theme.shadow }
-          ]}
-        >
-          <View style={styles.pulseWrap}>
-            <Animated.View
-              style={[
-                styles.pulse,
-                {
-                  opacity: pulseOpacity,
-                  transform: [{ scale: pulseScale }],
-                  backgroundColor: isOnline ? "#2E9B66" : "#A64B61"
-                }
-              ]}
-            />
-            <View
-              style={[
-                styles.updateDot,
-                { backgroundColor: isOnline ? "#2E9B66" : "#A64B61" }
-              ]}
-            />
-          </View>
-          <Text style={styles.updateText}>{updateLabel}</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFF5F8",
-    paddingTop: Platform.OS === "android" ? 30 : 0
   },
-  container: {
+  scrollView: {
     flex: 1,
-    backgroundColor: "#FFF5F8"
   },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 30,
-    gap: 16
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    marginBottom: 2
-  },
-  brandIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+  headerSection: {
+    paddingTop: 40,
+    paddingBottom: 60,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#F7D7E3",
-    shadowColor: "#D9447C",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3
-  },
-  headerText: {
-    flex: 1
-  },
-  themeSelector: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 12,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    elevation: 2
-  },
-  themeSelectorLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: 10
-  },
-  themeSelectorText: {
-    color: "#7B6871",
-    fontSize: 13,
-    fontWeight: "800"
-  },
-  themeButtons: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  themeButton: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    paddingHorizontal: 11,
-    paddingVertical: 8
-  },
-  themeDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6
-  },
-  themeButtonText: {
-    color: "#7B6871",
-    fontSize: 12,
-    fontWeight: "800"
   },
   eyebrow: {
-    color: "#9C8791",
-    fontSize: 13,
-    fontWeight: "700"
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 2,
+    marginTop: 12,
   },
   title: {
-    color: "#2E252A",
-    fontSize: 31,
-    fontWeight: "900",
-    marginTop: 2
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "800",
+    marginTop: 4,
   },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12
+  badge: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 12,
   },
-  gridCompact: {
-    gap: 10
-  },
-  connectionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 14,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3
-  },
-  connectionHeader: {
-    gap: 10
-  },
-  connectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8
-  },
-  connectionTitle: {
-    color: "#2E252A",
-    fontSize: 15,
-    fontWeight: "900"
-  },
-  connectionBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  connectionBadgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  connectionBadgeText: {
-    color: "#7B6871",
-    fontSize: 12,
-    fontWeight: "800"
-  },
-  connectionMeta: {
-    marginTop: 12
-  },
-  connectionMetaText: {
-    color: "#7B6871",
-    fontSize: 12,
-    fontWeight: "700"
-  },
-  connectionFields: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 12
-  },
-  connectionField: {
-    flex: 1,
-    gap: 6
-  },
-  connectionLabel: {
-    color: "#7B6871",
-    fontSize: 12,
-    fontWeight: "800"
-  },
-  connectionInput: {
-    minHeight: 42,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 11,
-    color: "#2E252A",
-    fontSize: 14,
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
     fontWeight: "700",
-    backgroundColor: "#FFFFFF"
+    letterSpacing: 1,
   },
-  connectionActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 12
-  },
-  wifiButton: {
-    minHeight: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 14
-  },
-  wifiButtonText: {
-    fontSize: 14,
-    fontWeight: "900"
-  },
-  connectButton: {
+  bodySection: {
     flex: 1,
-    minHeight: 42,
-    borderRadius: 14,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -32,
+    padding: 24,
+    paddingTop: 32,
+  },
+  themeSelector: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 6,
+    borderWidth: 1,
+    marginBottom: 32,
+    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    justifyContent: "space-between",
+  },
+  themePill: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 12,
+  },
+  themePillText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#5A6B63",
+  },
+  themePillTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  heroCard: {
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 32,
+    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  heroCardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8
+    marginBottom: 16,
   },
-  connectButtonDisabled: {
-    opacity: 0.72
-  },
-  connectButtonText: {
+  heroCardTitle: {
     color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: "900"
-  },
-  stateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14
-  },
-  stateMarker: {
-    width: 58,
-    height: 58,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  stateTextGroup: {
-    flex: 1
-  },
-  stateValue: {
-    fontSize: 29,
-    fontWeight: "900"
-  },
-  stateDescription: {
-    color: "#7B6871",
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 4
-  },
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-  summaryItem: {
-    flex: 1
-  },
-  summaryNumber: {
-    color: "#2E252A",
-    fontSize: 26,
-    fontWeight: "900"
-  },
-  summaryLabel: {
-    color: "#7B6871",
-    fontSize: 13,
     fontWeight: "700",
-    marginTop: 3
+    marginLeft: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  summaryDivider: {
-    width: 1,
-    height: 46,
-    backgroundColor: "#F3CAD9",
-    marginHorizontal: 18
+  heroCardTime: {
+    color: "#FFFFFF",
+    fontSize: 48,
+    fontWeight: "900",
   },
-  summaryDividerHorizontal: {
-    height: 1,
-    alignSelf: "stretch",
-    backgroundColor: "#F3CAD9",
-    marginVertical: 16
+  heroCardBadge: {
+    backgroundColor: "#FFFFFF",
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  heroCardBadgeText: {
+    fontWeight: "800",
+    fontSize: 12,
+    textTransform: "uppercase",
+  },
+  heroCardStreet: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  heroCardCountdown: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  scheduleItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+  },
+  scheduleDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 16,
+  },
+  scheduleContent: {
+    flex: 1,
+  },
+  scheduleDay: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A2E23",
+  },
+  scheduleType: {
+    fontSize: 12,
+    color: "#5A6B63",
+    marginTop: 2,
+  },
+  scheduleTimeContainer: {
+    alignItems: "flex-end",
+  },
+  scheduleTime: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1A2E23",
+  },
+  scheduleNextBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  scheduleNextText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  row: {
+    flexDirection: "row",
+    marginHorizontal: -6,
+  },
+  halfWidth: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5A6B63",
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#1A2E23",
+    fontWeight: "500",
+  },
+  buttonGroup: {
+    marginTop: 8,
+    gap: 12,
+  },
+  primaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+  secondaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  feedbackBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 16,
+    borderWidth: 1,
+  },
+  feedbackText: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginLeft: 8,
   },
   eventText: {
-    color: "#2E252A",
-    fontSize: 17,
-    fontWeight: "700",
-    lineHeight: 24
+    fontSize: 15,
+    color: "#5A6B63",
+    fontWeight: "500",
+    lineHeight: 22,
   },
-  updateIndicator: {
-    alignSelf: "center",
+  footer: {
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 40,
+  },
+  footerPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#F7D7E3"
   },
-  pulseWrap: {
-    width: 18,
-    height: 18,
+  pulseContainer: {
+    width: 14,
+    height: 14,
+    justifyContent: "center",
     alignItems: "center",
-    justifyContent: "center"
+    marginRight: 8,
   },
-  pulse: {
+  pulseCircle: {
     position: "absolute",
     width: 14,
     height: 14,
-    borderRadius: 7
+    borderRadius: 7,
   },
-  updateDot: {
+  pulseCore: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: 4,
   },
-  updateText: {
-    color: "#7B6871",
-    fontSize: 12,
-    fontWeight: "800"
-  }
+  footerText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#7C8E83",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
 });

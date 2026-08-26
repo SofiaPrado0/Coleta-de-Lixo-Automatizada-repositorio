@@ -1,34 +1,34 @@
-import { ReactNode } from "react";
-import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-type SectionCardProps = {
+interface SectionCardProps {
   title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  children: ReactNode;
-  accentColor?: string;
-  borderColor?: string;
-  shadowColor?: string;
-};
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  children: React.ReactNode;
+  accentColor: string;
+  borderColor: string;
+  shadowColor: string;
+}
 
 export function SectionCard({
   title,
   icon,
   children,
-  accentColor = "#D9447C",
-  borderColor = "#F7D7E3",
-  shadowColor = "#D9447C"
+  accentColor,
+  borderColor,
+  shadowColor,
 }: SectionCardProps) {
   return (
     <View style={[styles.card, { borderColor, shadowColor }]}>
-      <View style={styles.header}>
-        <View style={[styles.iconBox, { backgroundColor: `${accentColor}18` }]}>
-          <Ionicons name={icon} size={19} color={accentColor} />
+      <View style={[styles.topAccent, { backgroundColor: accentColor }]} />
+      <View style={styles.inner}>
+        <View style={styles.header}>
+          <MaterialCommunityIcons name={icon} size={22} color={accentColor} />
+          <Text style={[styles.title, { color: accentColor }]}>{title}</Text>
         </View>
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.content}>{children}</View>
       </View>
-
-      <View>{children}</View>
     </View>
   );
 }
@@ -36,30 +36,35 @@ export function SectionCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 3
+    marginBottom: 24,
+    overflow: "hidden",
+    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+  },
+  topAccent: {
+    height: 4,
+    width: "100%",
+  },
+  inner: {
+    padding: 20,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 14
-  },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center"
+    marginBottom: 16,
   },
   title: {
-    color: "#7B6871",
     fontSize: 14,
-    fontWeight: "700"
-  }
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginLeft: 8,
+  },
+  content: {
+    gap: 12,
+  },
 });

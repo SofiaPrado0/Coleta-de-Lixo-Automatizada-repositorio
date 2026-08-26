@@ -7,7 +7,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#FFF5F8"
+      "backgroundColor": "#0F4D2E"
     },
     "android": {
       "package": "com.maqueteinteligente.caminhaozinholixo",
